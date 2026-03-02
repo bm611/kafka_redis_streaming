@@ -4,32 +4,19 @@ A Kafka-based event pipeline simulating a booking platform where downstream serv
 
 ## Architecture
 
-```
-Producer (booking service)
-    │
-    ▼
-┌──────────────────┐
-│  Kafka Topic:    │
-│  booking-events  │
-└──────────────────┘
-    │         │         │
-    ▼         ▼         ▼
-Notifications  Fraud    Analytics
- (consumer)   (consumer) (consumer)
-                 │
-                 ▼
-              Redis
-         (feature store)
-```
+> Diagram generated with the [diagrams](https://github.com/mingrammer/diagrams) library -- regenerate via `uv run python scripts/generate_diagram.py`.
+
+![Architecture Diagram](docs/architecture.png)
 
 ## Services
 
 | Service | File | Storage | Purpose |
 |---|---|---|---|
-| **Producer** | `producer.py` | — | Simulates booking events using Faker |
-| **Notifications** | `consumer_notifications.py` | — | Logs confirmation emails |
-| **Fraud Detection** | `consumer_fraud.py` | Redis | Scores bookings in real time |
-| **Analytics** | `consumer_analytics.py` | — | Tracks revenue per hotel |
+| **Producer** | `src/booking/producer.py` | — | Simulates booking events using Faker |
+| **Notifications** | `src/booking/consumers/notifications.py` | — | Logs confirmation emails |
+| **Fraud Detection** | `src/booking/consumers/fraud.py` | Redis | Scores bookings in real time |
+| **Analytics** | `src/booking/consumers/analytics.py` | — | Tracks revenue per hotel |
+| **Warehouse** | `src/booking/consumers/warehouse.py` | SQLite | Batch writes to local DB |
 
 ## How Redis is Used (Fraud Detection)
 
@@ -63,6 +50,7 @@ After scoring a booking, the result is stored so other services (e.g., a dashboa
 ```bash
 cd docker
 docker compose up -d
+cd ..
 ```
 This starts Postgres, Kafka (with Zookeeper), and Redis.
 
@@ -74,29 +62,29 @@ uv sync
 ```
 
 ### 3. Run the Pipeline
-Open 4 terminals:
+Open 5 terminals:
 
 ```bash
 # Terminal 1 — Producer
-python producer.py
+PYTHONPATH=src python src/booking/producer.py
 
 # Terminal 2 — Notifications
-python consumer_notifications.py
+PYTHONPATH=src python src/booking/consumers/notifications.py
 
 # Terminal 3 — Fraud Detection (writes to Redis)
-python consumer_fraud.py
+PYTHONPATH=src python src/booking/consumers/fraud.py
 
 # Terminal 4 — Analytics
-python consumer_analytics.py
+PYTHONPATH=src python src/booking/consumers/analytics.py
 
 # Terminal 5 — Warehouse (batch writes to SQLite)
-python consumer_warehouse.py
+PYTHONPATH=src python src/booking/consumers/warehouse.py
 ```
 
 ### 4. Query the Warehouse
 Once the warehouse consumer has flushed a few batches:
 ```bash
-python query_warehouse.py
+PYTHONPATH=src python scripts/query_warehouse.py
 ```
 
 ### 5. Inspect Redis Data

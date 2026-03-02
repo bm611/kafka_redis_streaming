@@ -2,8 +2,8 @@ from kafka import KafkaConsumer
 import json
 import redis
 
-from schema import validate_booking_event
-from dlq import send_to_dlq
+from booking.schema import validate_booking_event
+from booking.dlq import send_to_dlq
 
 CONSUMER_NAME = "analytics-service"
 

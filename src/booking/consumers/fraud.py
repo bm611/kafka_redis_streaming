@@ -3,8 +3,8 @@ import json
 import redis
 from kafka import KafkaConsumer
 
-from schema import validate_booking_event
-from dlq import send_to_dlq
+from booking.schema import validate_booking_event
+from booking.dlq import send_to_dlq
 
 CONSUMER_NAME = "fraud-detection-service"
 

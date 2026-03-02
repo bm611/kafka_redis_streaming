@@ -3,12 +3,12 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-from schema import validate_booking_event
-from dlq import send_to_dlq
+from booking.schema import validate_booking_event
+from booking.dlq import send_to_dlq
 
 CONSUMER_NAME = "warehouse-service"
 BATCH_SIZE = 10
-DB_PATH = "bookings_warehouse.db"
+DB_PATH = "data/bookings_warehouse.db"
 
 def init_db(conn):
     conn.executescript("""

@@ -1,6 +1,6 @@
 import sqlite3
 
-DB_PATH = "bookings_warehouse.db"
+DB_PATH = "data/bookings_warehouse.db"
 conn = sqlite3.connect(DB_PATH)
 conn.row_factory = sqlite3.Row
 
