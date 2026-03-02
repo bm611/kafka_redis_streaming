@@ -1,0 +1,12 @@
+booking_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PORT', '5433') | int }}"
+      user: booking_user
+      password: booking_pass
+      dbname: booking_analytics
+      schema: public
+      threads: 4

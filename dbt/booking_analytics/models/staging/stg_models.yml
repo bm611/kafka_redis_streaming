@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: stg_bookings
+    description: Cleaned booking events
+    columns:
+      - name: booking_id
+        tests:
+          - not_null
+          - unique
+      - name: payment_method
+        tests:
+          - accepted_values:
+              values: ["credit_card", "paypal", "debit_card"]
+      - name: room_type
+        tests:
+          - accepted_values:
+              values: ["Standard", "Deluxe", "Suite"]
+
+  - name: stg_ad_impressions
+    description: Cleaned ad impressions
+    columns:
+      - name: impression_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_ad_clicks
+    description: Cleaned ad clicks
+    columns:
+      - name: click_id
+        tests:
+          - not_null
+          - unique
+      - name: impression_id
+        tests:
+          - relationships:
+              to: ref('stg_ad_impressions')
+              field: impression_id

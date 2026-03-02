@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: bookings
+        description: Raw booking events
+        columns:
+          - name: booking_id
+            tests:
+              - not_null
+              - unique
+          - name: total_price_usd
+            tests:
+              - not_null
+
+      - name: ad_impressions
+        description: Raw ad impression events from third-party providers
+        columns:
+          - name: impression_id
+            tests:
+              - not_null
+              - unique
+
+      - name: ad_clicks
+        description: Raw ad click events
+        columns:
+          - name: click_id
+            tests:
+              - not_null
+              - unique

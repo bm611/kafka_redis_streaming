@@ -1,0 +1,12 @@
+[project]
+name = "booking-ads-analytics"
+version = "0.1.0"
+description = "Airflow + dbt ELT pipeline for booking ads analytics"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "psycopg2-binary>=2.9.0",
+    "faker>=28.0.0",
+    "dbt-core>=1.8.0",
+    "dbt-postgres>=1.8.0",
+]
