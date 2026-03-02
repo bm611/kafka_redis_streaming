@@ -5,20 +5,20 @@ models:
     description: Daily ad performance metrics by partner, hotel, and placement
     columns:
       - name: performance_key
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: ctr
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1
       - name: revenue
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
       - name: roas
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
 
@@ -26,17 +26,17 @@ models:
     description: Hotel dimension with aggregated booking stats
     columns:
       - name: hotel_id
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: hotel_name
-        tests:
+        data_tests:
           - not_null
 
   - name: dim_partners
     description: Ad partner dimension with aggregated impression stats
     columns:
       - name: partner_id
-        tests:
+        data_tests:
           - not_null
           - unique

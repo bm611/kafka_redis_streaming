@@ -82,7 +82,13 @@ docker compose up -d
 cd ..
 ```
 
-This starts **Postgres** (warehouse) and **Airflow** (webserver + scheduler) with dbt pre-installed.
+This starts **Postgres** (warehouse) and **Airflow** (`standalone` mode: api-server + scheduler + dag-processor in a single container) with dbt pre-installed.
+
+The admin password is generated on first boot — check the logs:
+
+```bash
+docker logs booking_airflow 2>&1 | grep "Password for user"
+```
 
 ### 2. Seed Raw Data
 
@@ -112,12 +118,13 @@ cd ..
 
 ### 4. Trigger via Airflow
 
-Open the Airflow UI at [http://localhost:8080](http://localhost:8080) (user: `airflow`, pass: `airflow`).
+Open the Airflow UI at [http://localhost:8080](http://localhost:8080) and log in with the credentials from step 1.
 
 Enable and trigger the `booking_ads_dbt_pipeline` DAG. It will:
-1. Seed raw data (or skip if already seeded)
-2. Run `dbt run` (staging → intermediate → marts)
-3. Run `dbt test` (data quality checks)
+1. `dbt debug` — verify connection
+2. `dbt deps` — install packages (e.g. `dbt_utils`)
+3. `dbt run --select staging` → `dbt test --select staging`
+4. `dbt run --select intermediate marts` → `dbt test --select marts`
 
 ### 5. Query the Marts
 
@@ -137,9 +144,8 @@ SELECT * FROM marts.dim_hotels;
 |---|---|
 | **ELT Pattern** | Raw data loaded first, transformations happen in-warehouse via dbt |
 | **Star Schema** | Fact table (`fct_ad_performance`) + dimension tables (`dim_hotels`, `dim_partners`) |
-| **Data Quality** | dbt tests: `not_null`, `unique`, `accepted_values`, `relationships`, + custom tests |
-| **Incremental Models** | `fct_ad_performance` uses `incremental` materialization for efficiency |
-| **Orchestration** | Airflow DAG with task dependencies: seed → run → test |
+| **Data Quality** | dbt `data_tests`: `not_null`, `unique`, `accepted_values`, `relationships`, `dbt_utils.accepted_range` |
+| **Orchestration** | Airflow DAG with staged quality gates: debug → deps → staging (run/test) → marts (run/test) |
 | **Reusable Assets** | Staging models are reusable across multiple marts (for ML, reporting, etc.) |
 | **Schema Design** | Raw → staging → intermediate → marts layering pattern |
 
@@ -151,8 +157,9 @@ SELECT * FROM marts.dim_hotels;
 | `unique` | `stg_bookings` | `booking_id` | No duplicate bookings |
 | `accepted_values` | `stg_bookings` | `payment_method` | Only known payment methods |
 | `relationships` | `fct_ad_performance` | `hotel_id` | FK integrity to `dim_hotels` |
-| `custom: positive_revenue` | `fct_ad_performance` | `revenue` | Revenue must be ≥ 0 |
-| `custom: valid_ctr_range` | `fct_ad_performance` | `ctr` | CTR must be between 0 and 1 |
+| `dbt_utils.accepted_range` | `fct_ad_performance` | `revenue` | Revenue must be ≥ 0 |
+| `dbt_utils.accepted_range` | `fct_ad_performance` | `ctr` | CTR must be between 0 and 1 |
+| `dbt_utils.accepted_range` | `fct_ad_performance` | `roas` | ROAS must be ≥ 0 |
 
 ## Project Structure
 
