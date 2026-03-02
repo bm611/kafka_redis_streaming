@@ -3,6 +3,10 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
+from schema import validate_booking_event
+from dlq import send_to_dlq
+
+CONSUMER_NAME = "warehouse-service"
 BATCH_SIZE = 10
 DB_PATH = "bookings_warehouse.db"
 
@@ -53,7 +57,7 @@ def init_db(conn):
 def flush_batch(conn, batch):
     now = datetime.now(timezone.utc).isoformat()
 
-    # Insert raw bookings
+    # INSERT OR IGNORE ensures idempotency — duplicate booking_ids are skipped
     conn.executemany(
         """INSERT OR IGNORE INTO bookings
            (booking_id, event_timestamp, user_id, hotel_name, room_type,
@@ -67,7 +71,8 @@ def flush_batch(conn, batch):
         ) for b in batch]
     )
 
-    # Refresh aggregate tables from the full bookings table
+    # Aggregates are recomputed from the deduplicated bookings table,
+    # so duplicate Kafka deliveries cannot skew the stats
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     conn.execute("DELETE FROM daily_hotel_stats WHERE stat_date = ?", (today,))
@@ -103,7 +108,7 @@ def flush_batch(conn, batch):
 consumer = KafkaConsumer(
     'booking-events',
     bootstrap_servers='localhost:9092',
-    group_id='warehouse-service',
+    group_id=CONSUMER_NAME,
     value_deserializer=lambda m: json.loads(m.decode('utf-8'))
 )
 
@@ -113,12 +118,22 @@ init_db(conn)
 batch = []
 print(f"Warehouse Service listening (batch size={BATCH_SIZE})...")
 for msg in consumer:
-    b = msg.value
-    batch.append(b)
-    print(f"  [BUFFER] {len(batch)}/{BATCH_SIZE} — {b['booking_id'][:8]}... | {b['hotel_name']}")
+    try:
+        b = msg.value
 
-    if len(batch) >= BATCH_SIZE:
-        flush_batch(conn, batch)
-        total = conn.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
-        print(f"  [FLUSHED] {len(batch)} events written | {total} total bookings in warehouse")
-        batch = []
+        errors = validate_booking_event(b)
+        if errors:
+            send_to_dlq(b, f"schema validation failed: {errors}", CONSUMER_NAME)
+            continue
+
+        batch.append(b)
+        print(f"  [BUFFER] {len(batch)}/{BATCH_SIZE} — {b['booking_id'][:8]}... | {b['hotel_name']}")
+
+        if len(batch) >= BATCH_SIZE:
+            flush_batch(conn, batch)
+            total = conn.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
+            print(f"  [FLUSHED] {len(batch)} events written | {total} total bookings in warehouse")
+            batch = []
+
+    except Exception as e:
+        send_to_dlq(b if 'b' in dir() else msg.value, str(e), CONSUMER_NAME)

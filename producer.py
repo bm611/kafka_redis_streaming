@@ -1,7 +1,9 @@
 from kafka import KafkaProducer
 from faker import Faker
 import json, random, time, uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+from schema import validate_booking_event
 
 producer = KafkaProducer(
     bootstrap_servers='localhost:9092',
@@ -15,7 +17,7 @@ def generate_booking_event():
     check_in = datetime.now() + timedelta(days=random.randint(1, 60))
     return {
         "booking_id": str(uuid.uuid4()),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "user_id": str(uuid.uuid4()),
         "hotel_name": random.choice(HOTELS),
         "room_type": random.choice(["Standard", "Deluxe", "Suite"]),
@@ -29,6 +31,10 @@ def generate_booking_event():
 print("Producing booking events... (Ctrl+C to stop)")
 while True:
     event = generate_booking_event()
+    errors = validate_booking_event(event)
+    if errors:
+        print(f"  [REJECTED] Schema validation failed: {errors}")
+        continue
     producer.send('booking-events', value=event)
     print(f"  Sent: {event['booking_id']} | {event['hotel_name']} | ${event['total_price_usd']}")
     time.sleep(1.5)

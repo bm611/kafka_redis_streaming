@@ -3,12 +3,17 @@ import json
 import redis
 from kafka import KafkaConsumer
 
+from schema import validate_booking_event
+from dlq import send_to_dlq
+
+CONSUMER_NAME = "fraud-detection-service"
+
 r = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
 consumer = KafkaConsumer(
     "booking-events",
     bootstrap_servers="localhost:9092",
-    group_id="fraud-detection-service",
+    group_id=CONSUMER_NAME,
     value_deserializer=lambda m: json.loads(m.decode("utf-8")),
 )
 
@@ -16,6 +21,10 @@ consumer = KafkaConsumer(
 def score_booking(b):
     user_id = b["user_id"]
     booking_id = b["booking_id"]
+
+    # Idempotency — skip if already scored
+    if r.exists(f"fraud:booking:{booking_id}"):
+        return None, None, None
 
     # Track how many bookings this user has made (sliding window: 1 hour)
     user_key = f"fraud:user:{user_id}:count"
@@ -50,11 +59,26 @@ def score_booking(b):
 
 print("Fraud Detection Service listening...")
 for msg in consumer:
-    b = msg.value
-    risk, reasons, count = score_booking(b)
-    icon = "🚨" if risk == "HIGH" else "✅"
-    print(
-        f"  [{icon} {risk}] Booking {b['booking_id'][:8]}... "
-        f"| ${b['total_price_usd']} via {b['payment_method']} "
-        f"| user bookings={count} reasons={reasons}"
-    )
+    try:
+        b = msg.value
+
+        errors = validate_booking_event(b)
+        if errors:
+            send_to_dlq(b, f"schema validation failed: {errors}", CONSUMER_NAME)
+            continue
+
+        risk, reasons, count = score_booking(b)
+
+        if risk is None:
+            print(f"  [SKIP] Duplicate — already scored {b['booking_id'][:8]}...")
+            continue
+
+        icon = "🚨" if risk == "HIGH" else "✅"
+        print(
+            f"  [{icon} {risk}] Booking {b['booking_id'][:8]}... "
+            f"| ${b['total_price_usd']} via {b['payment_method']} "
+            f"| user bookings={count} reasons={reasons}"
+        )
+
+    except Exception as e:
+        send_to_dlq(b if 'b' in dir() else msg.value, str(e), CONSUMER_NAME)
