@@ -23,7 +23,7 @@ with Diagram(
     "Real-Time Hotel Booking Events Pipeline",
     filename="docs/architecture",
     show=False,
-    direction="TB",
+    direction="LR",
     graph_attr=graph_attr,
     edge_attr=edge_attr,
     outformat="png",
@@ -37,40 +37,41 @@ with Diagram(
         zk - Edge(style="dashed", label="manages") - topic
 
     with Cluster("Consumer Groups", graph_attr={"style": "rounded", "bgcolor": "#f3e8fd"}):
-        notifications = Python("Notifications\nService")
-        fraud = Python("Fraud Detection\nService")
-        analytics = Python("Analytics\nService")
         warehouse = Python("Warehouse\nService")
+        analytics = Python("Analytics\nService")
+        fraud = Python("Fraud Detection\nService")
+        notifications = Python("Notifications\nService")
 
     with Cluster("Storage", graph_attr={"style": "rounded", "bgcolor": "#fdf8e8"}):
-        redis = Redis("Redis")
         sqlite = SQL("SQLite")
+        redis = Redis("Redis")
         postgres = PostgreSQL("PostgreSQL\n(provisioned)")
 
     with Cluster("Dead Letter Queue", graph_attr={"style": "rounded", "bgcolor": "#fde8e8"}):
         dlq = Kafka("booking-events-dlq")
 
-    query = Python("query_warehouse.py")
+    with Cluster("Downstream"):
+        query = Python("query_warehouse.py")
 
     # Producer -> Kafka
     producer >> Edge(label="publish", color="darkgreen") >> topic
 
     # Kafka -> Consumers
-    topic >> Edge(color="#7b1fa2") >> notifications
-    topic >> Edge(color="#7b1fa2") >> fraud
-    topic >> Edge(color="#7b1fa2") >> analytics
     topic >> Edge(color="#7b1fa2") >> warehouse
+    topic >> Edge(color="#7b1fa2") >> analytics
+    topic >> Edge(color="#7b1fa2") >> fraud
+    topic >> Edge(color="#7b1fa2") >> notifications
 
     # Consumers -> Storage
-    notifications >> Edge(label="dedup keys (TTL 7d)", color="darkorange") >> redis
-    fraud >> Edge(label="velocity (1h) + scores (24h)", color="darkorange") >> redis
-    analytics >> Edge(label="revenue counters", color="darkorange") >> redis
     warehouse >> Edge(label="batch flush / 10 events", color="steelblue") >> sqlite
+    analytics >> Edge(label="revenue counters", color="darkorange") >> redis
+    fraud >> Edge(label="velocity (1h) + scores (24h)", color="darkorange") >> redis
+    notifications >> Edge(label="dedup keys (TTL 7d)", color="darkorange") >> redis
 
     # Consumers -> DLQ (single grouped edge for clarity)
-    [notifications, fraud, analytics, warehouse] >> Edge(
+    [warehouse, analytics, fraud, notifications] >> Edge(
         style="dashed", color="red", label="on failure"
     ) >> dlq
 
     # Query script
-    query >> Edge(label="reads", color="steelblue") >> sqlite
+    sqlite >> Edge(label="queried by", color="steelblue") >> query
